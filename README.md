@@ -21,6 +21,12 @@
 
 ノイズ版とは別の数値計算を行う教材です。低解像度の基礎版で、参考動画と同等の実写品質ではありません。KodeLife用のネイティブプロジェクトは未同梱です。
 
+## 雨粒と曇りガラス：Heartfelt
+
+[10. HeartfeltをKodeLifeへ移植する](tutorials/10_heartfelt.md)では、BigWIngsさんの[原作](https://www.shadertoy.com/view/ltffzl)から雨粒・透明な軌跡・曇りガラスの表現を学びます。[完成コード](third_party/heartfelt/heartfelt_kodelife.frag)は画像なしでも動きます。
+
+**ライセンスの例外：** Heartfeltの原作・移植版・描画例は **CC BY-NC-SA 3.0** です。ルートのMITライセンスはこれらには適用されません。[作者表記と利用条件](third_party/heartfelt/NOTICE.md)を参照してください。
+
 ## この教材の使い方
 
 各レッスンのコードは全体をコピーして、KodeLifeの **Fragment** タブへ貼り付けます。前のレッスンの末尾に追加せず、Fragmentの内容を置き換えてください。同じコードは `shaders/` フォルダに番号順で保存しています。`.frag` はテキストのソースコードで、KodeLifeのプロジェクトファイルではありません。
