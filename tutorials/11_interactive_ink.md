@@ -9,7 +9,7 @@
 - 見た目：[Adobe Stock / DK「Macro shot of an ink blot fills the entire screen」310354116](https://stock.adobe.com/jp/video/macro-shot-of-an-ink-blot-fills-the-entire-screen/310354116)。濃い黒の中心、周辺の薄い膜と渦、外へ広がる輪郭を参考にしました。
 - 操作：[JacksonPollock.org / Miltos Manetas](https://jacksonpollock.org/)。マウスの動きが跡として重なる操作を参考にしています。
 
-素材やサイトのソースはコピーせず、独自のシェーダーと操作処理で作っています。今回の版は正面から描く**2Dの移流・拡散と演出を組み合わせたモデル**です。実写の完全再現や物理的に正確な紙への浸透ではありません。[従来の3D流体教材](09_fluid3d.md)は立体空間の学習用に残しています。
+インクの流れとにじみを表現する**2D描画モデル**です。立体的な流れは[3D流体教材](09_fluid3d.md)で学べます。
 
 従来の「決まった場所に落ちる一滴」から、「自分で落とす場所・線・色・量を決められるキャンバス」へ作り直しました。インクは自動で消えず、湿り気が減るとその場に残ります。
 
