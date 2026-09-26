@@ -1,0 +1,975 @@
+{
+  "description": "Wiring reference, not a native KodeLife project file",
+  "grid": 64,
+  "columns": 8,
+  "pressureIterations": 40,
+  "parameters": {
+    "gridSize": 64,
+    "dt": 0.016666666666666666,
+    "reset": 0,
+    "mode": 0,
+    "confinement": 2,
+    "yaw": 0.35,
+    "pitch": 0.08,
+    "absorption": 32,
+    "debugView": 0
+  },
+  "passes": [
+    {
+      "name": "Clock",
+      "shader": "shaders/00_clock.frag",
+      "resolution": [
+        1,
+        1
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "clockTex": {
+          "pass": "Clock",
+          "frame": "previous"
+        }
+      }
+    },
+    {
+      "name": "Advect",
+      "shader": "shaders/01_advect_velocity.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "stateTex": {
+          "pass": "State",
+          "frame": "previous"
+        }
+      }
+    },
+    {
+      "name": "Curl",
+      "shader": "shaders/02_curl.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "velocityTex": {
+          "pass": "Advect",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "Forces",
+      "shader": "shaders/03_forces.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "velocityTex": {
+          "pass": "Advect",
+          "frame": "current"
+        },
+        "curlTex": {
+          "pass": "Curl",
+          "frame": "current"
+        },
+        "clockTex": {
+          "pass": "Clock",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "Divergence",
+      "shader": "shaders/04_divergence.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "velocityTex": {
+          "pass": "Forces",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "PressureSeed",
+      "shader": "shaders/05_pressure_seed.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {}
+    },
+    {
+      "name": "P01",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "PressureSeed",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P02",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P01",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P03",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P02",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P04",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P03",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P05",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P04",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P06",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P05",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P07",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P06",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P08",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P07",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P09",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P08",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P10",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P09",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P11",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P10",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P12",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P11",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P13",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P12",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P14",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P13",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P15",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P14",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P16",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P15",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P17",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P16",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P18",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P17",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P19",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P18",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P20",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P19",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P21",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P20",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P22",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P21",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P23",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P22",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P24",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P23",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P25",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P24",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P26",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P25",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P27",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P26",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P28",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P27",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P29",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P28",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P30",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P29",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P31",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P30",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P32",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P31",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P33",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P32",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P34",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P33",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P35",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P34",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P36",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P35",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P37",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P36",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P38",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P37",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P39",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P38",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "P40",
+      "shader": "shaders/06_pressure_jacobi.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "pressureTex": {
+          "pass": "P39",
+          "frame": "current"
+        },
+        "divergenceTex": {
+          "pass": "Divergence",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "Project",
+      "shader": "shaders/07_project.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "velocityTex": {
+          "pass": "Forces",
+          "frame": "current"
+        },
+        "pressureTex": {
+          "pass": "P40",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "DensityForward",
+      "shader": "shaders/08_density_forward.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "velocityTex": {
+          "pass": "Project",
+          "frame": "current"
+        },
+        "stateTex": {
+          "pass": "State",
+          "frame": "previous"
+        }
+      }
+    },
+    {
+      "name": "DensityReverse",
+      "shader": "shaders/09_density_reverse.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "velocityTex": {
+          "pass": "Project",
+          "frame": "current"
+        },
+        "forwardTex": {
+          "pass": "DensityForward",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "State",
+      "shader": "shaders/10_state.frag",
+      "resolution": [
+        512,
+        512
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "stateTex": {
+          "pass": "State",
+          "frame": "previous"
+        },
+        "velocityTex": {
+          "pass": "Project",
+          "frame": "current"
+        },
+        "forwardTex": {
+          "pass": "DensityForward",
+          "frame": "current"
+        },
+        "reverseTex": {
+          "pass": "DensityReverse",
+          "frame": "current"
+        },
+        "clockTex": {
+          "pass": "Clock",
+          "frame": "current"
+        }
+      }
+    },
+    {
+      "name": "Render",
+      "shader": "shaders/11_render.frag",
+      "resolution": [
+        720,
+        540
+      ],
+      "format": "RGBA32F",
+      "inputs": {
+        "stateTex": {
+          "pass": "State",
+          "frame": "current"
+        }
+      }
+    }
+  ]
+}
