@@ -8,11 +8,31 @@
 | --- | --- | --- |
 | [7. 立ちのぼる煙](tutorials/07_smoke.md) | ノイズで揺れる2Dの煙 | [GLSL](shaders/07_smoke.frag) |
 | [8. 水中に広がるインク](tutorials/08_ink_in_water.md) | 一滴が沈んで広がる2D表現 | [GLSL](shaders/08_ink_in_water.frag) |
-| [9. 3D流体](tutorials/09_fluid3d.md) | 格子で計算するインクと煙 | [デモ](fluid3d/preview.html)・[GLSL](fluid3d/shaders) |
+| [9. 3D流体](tutorials/09_fluid3d.md) | 格子で計算するインクと煙 | [デモ](examples/fluid3d/preview.html)・[GLSL](fluid3d/shaders) |
 | [10. 雨粒と曇りガラス](tutorials/10_heartfelt.md) | BigWIngsのHeartfeltを使った雨の表現 | [GLSL](third_party/heartfelt/heartfelt_kodelife.frag) |
-| [11. 墨の庭](tutorials/11_interactive_ink.md) | マウスで描くインク。色替え・にじみ調整・PNG保存 | [デモ](inkplay/preview.html)・[GLSL](inkplay/shaders) |
+| [11. 墨の庭](tutorials/11_interactive_ink.md) | マウスで描くインク。色替え・にじみ調整・PNG保存 | [デモ](examples/inkplay/preview.html)・[GLSL](inkplay/shaders) |
 
-デモはHTMLをダウンロードしてブラウザーで開きます。GitHubではファイルの **Download raw file** を選んでください。3D流体と墨の庭のKodeLife設定は、各チュートリアルを参照してください。
+## サンプル一覧
+
+```text
+examples/
+├── fluid3d -> ../fluid3d
+└── inkplay -> ../inkplay
+```
+
+サンプルの本体は `examples/` からアクセスできます。各デモはHTMLをダウンロードしてブラウザーで開きます。GitHubではファイルの **Download raw file** を選んでください。3D流体と墨の庭のKodeLife設定は、各チュートリアルを参照してください。
+
+## JavaScriptの検査と整形
+
+デモの手書きJavaScriptには ESLint と Prettier を使います。Node.js を用意したあと、リポジトリのルートで次を実行してください。
+
+```sh
+npm install
+npm run lint
+npm run format
+```
+
+整形結果を変更せずに確認する場合は `npm run format:check` を使います。生成された `shaders.js` と、シェーダーを埋め込んだ `preview.html` は検査・整形の対象外です。
 
 ## この教材の使い方
 

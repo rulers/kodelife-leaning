@@ -1,183 +1,459 @@
 <!doctype html>
 <html lang="ja">
+
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>墨が流れる — 3D流体の実験室</title>
-<style>
-:root{color-scheme:light;--paper:#f5f4ef;--ink:#242827;--muted:#66706b;--line:#d6d9d1;--accent:#265d53}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.65 system-ui,-apple-system,sans-serif}main{max-width:1360px;margin:auto;padding:32px}header{display:flex;align-items:end;justify-content:space-between;gap:24px;border-bottom:1px solid var(--line);padding-bottom:20px}small{letter-spacing:.14em;color:var(--muted)}h1{font:500 clamp(25px,3.5vw,42px)/1.4 serif;margin:8px 0}header p{max-width:470px;margin:0;color:var(--muted)}.layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:28px;margin-top:28px}.stage{border:1px solid var(--line);background:#f6f6f2;position:relative;min-width:0}canvas{display:block;width:100%;height:auto;aspect-ratio:4/3;touch-action:none;cursor:grab}.caption{display:flex;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}fieldset{border:0;margin:0 0 24px;padding:0}legend{font-weight:650;margin-bottom:10px}label{display:block;margin:14px 0 5px}select,button{font:inherit;border:1px solid var(--line);background:#fffefa;color:var(--ink);padding:9px 12px;border-radius:6px}select{width:100%}button{cursor:pointer}button:hover{border-color:var(--accent)}button.primary{background:var(--accent);color:white;border-color:var(--accent)}.buttons{display:flex;gap:8px;flex-wrap:wrap}input[type=range]{width:100%;accent-color:var(--accent)}output{float:right;font-variant-numeric:tabular-nums}.note{font-size:12px;color:var(--muted)}#status{padding:12px 0;min-height:50px;font-size:13px;font-variant-numeric:tabular-nums}#error{color:#9e3026;white-space:pre-wrap}details{border-top:1px solid var(--line);margin-top:24px;padding-top:18px}summary{cursor:pointer}a{color:var(--accent)}:focus-visible{outline:3px solid #96bdb0;outline-offset:3px}@media(max-width:850px){main{padding:20px}header{display:block}header p{max-width:none}.layout{grid-template-columns:1fr}aside{display:grid;grid-template-columns:1fr 1fr;gap:18px}fieldset{margin:0}#status,#error,.note{grid-column:1/-1}}@media(max-width:450px){aside{display:block}}
-</style>
-</head>
-<body><main>
-<header><div><small>KODELIFE STUDY / 09</small><h1>墨が流れる、空間をつくる。</h1></div><p>速度・圧力・濃度を3Dの格子で更新する流体実験。白い水の中に墨を落とし、角度を変えて奥行きを観察します。</p></header>
-<div class="layout"><section class="stage" aria-label="3D流体プレビュー"><canvas id="view" width="720" height="540" aria-label="ドラッグで視点を回転できる3D流体"></canvas><div class="caption"><span>ドラッグで回転 · 停止中も観察できます</span><span id="gridLabel">64 × 64 × 64</span></div></section>
-<aside>
-<fieldset><legend>実験</legend><label for="mode">流体</label><select id="mode"><option value="0">水中の黒いインク</option><option value="1">上昇する煙</option></select><p class="note">変更すると計算を初期化します。</p><div class="buttons"><button id="pause" class="primary">一時停止</button><button id="reset">最初から</button><button id="step">1ステップ</button></div><button id="advance" style="margin-top:10px">8秒まで計算</button></fieldset>
-<fieldset><legend>見た目と流れ</legend><label for="absorption">濃さ <output id="absorptionValue">32</output></label><input id="absorption" type="range" min="5" max="90" value="32"><label for="vorticity">渦の補強 <output id="vorticityValue">2.0</output></label><input id="vorticity" type="range" min="0" max="4" step="0.5" value="2"><p class="note">0で補強なし。大きい値は細かな渦を強調します。</p><label for="yaw">見る角度 <output id="yawValue">20°</output></label><input id="yaw" type="range" min="-180" max="180" value="20"></fieldset>
-<fieldset><legend>計算を観察</legend><label for="grid">流体の解像度（変更で初期化）</label><select id="grid"><option value="64">64³ / 標準</option><option value="96">96³ / 高精細</option><option value="128">128³ / 高負荷</option></select><label for="display">表示</label><select id="display"><option value="0">立体の濃度を重ねる</option><option value="1">中央の断面</option></select><label for="iterations">圧力の反復回数</label><select id="iterations"><option value="20">20回 / 軽量</option><option value="40" selected>40回 / 標準</option><option value="80">80回 / より収束</option></select><label for="quality">描画サイズ</label><select id="quality"><option value="480">480 × 360 / 軽量</option><option value="720" selected>720 × 540 / 標準</option><option value="960">960 × 720 / 高精細</option></select></fieldset>
-<div id="status" role="status">GPUを準備しています…</div><p id="error" role="alert"></p>
-</aside></div>
-<details><summary>この実験で計算していること</summary><p>速度の移流 → 渦と外力 → 発散 → 圧力の反復計算 → 速度補正 → 濃度の移流と補正 → 3D描画。奥行きのスライスを2Dテクスチャに並べて計算しています。</p><p>インクは最初の約2秒だけ注入され、その後も流れ続けます。再度落とすには「最初から」。煙は連続注入します。カメラの操作は流体に力を加えません。</p><p>学習用の低解像度モデルです。実写の極細の筋、水面・屈折、顔料粒子の沈殿、厳密な質量保存は再現しません。煙の浮力は濃度による近似です。</p><p><a href="https://github.com/rulers/kodelife-leaning/blob/main/tutorials/09_fluid3d.md">チュートリアルを読む</a> · <a href="https://www.youtube.com/watch?v=i2x9PEIYFeM">参考映像</a></p></details>
-</main><script>// Generated by tools/build.py; edit src/*.glsl instead.
-window.FLUID_SHADERS = {
-  "00_clock": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() { fragColor=reset>0.5?vec4(0):vec4(simTime()+dt,0,0,1); }\n",
-  "01_advect_velocity": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); vec3 p=vec3(c);\n    vec3 bx=trace(stateTex,p+vec3(0.5,0,0),dt)-vec3(0.5,0,0);\n    vec3 by=trace(stateTex,p+vec3(0,0.5,0),dt)-vec3(0,0.5,0);\n    vec3 bz=trace(stateTex,p+vec3(0,0,0.5),dt)-vec3(0,0,0.5);\n    vec3 v=vec3(sampleField(stateTex,bx).r,sampleField(stateTex,by).g,sampleField(stateTex,bz).b);\n    fragColor=vec4(walls(v,c),fetchCell(stateTex,c).a);\n}\n",
-  "02_curl": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    vec3 p=vec3(cell());\n    vec3 dx=(velocityAt(velocityTex,p+vec3(1,0,0))-velocityAt(velocityTex,p-vec3(1,0,0)))*0.5;\n    vec3 dy=(velocityAt(velocityTex,p+vec3(0,1,0))-velocityAt(velocityTex,p-vec3(0,1,0)))*0.5;\n    vec3 dz=(velocityAt(velocityTex,p+vec3(0,0,1))-velocityAt(velocityTex,p-vec3(0,0,1)))*0.5;\n    vec3 w=vec3(dy.z-dz.y,dz.x-dx.z,dx.y-dy.x);\n    fragColor=vec4(w,length(w));\n}\n",
-  "03_forces": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvec3 vortexForce(ivec3 c) {\n    vec3 grad=vec3(fetchCell(curlTex,c+EX).a-fetchCell(curlTex,c-EX).a,\n                   fetchCell(curlTex,c+EY).a-fetchCell(curlTex,c-EY).a,\n                   fetchCell(curlTex,c+EZ).a-fetchCell(curlTex,c-EZ).a)*0.5;\n    vec3 normal=grad/max(length(grad),0.0001);\n    return confinement*cross(normal,fetchCell(curlTex,c).xyz);\n}\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); vec3 p=vec3(c);\n    vec4 old=fetchCell(velocityTex,c);\n    vec3 f0=vortexForce(c);\n    vec3 f=0.5*vec3(f0.x+vortexForce(c+EX).x,f0.y+vortexForce(c+EY).y,f0.z+vortexForce(c+EZ).z);\n    float density=0.5*(old.a+fetchCell(velocityTex,c+EY).a);\n    float direction=mode>0.5?1.0:-1.0;\n    f.y+=direction*(density*5.0+source(p+vec3(0,0.5,0))*28.0);\n    // Slightly angled, time-varying injection breaks perfect axial symmetry.\n    // This is a localized external force, not a procedural density pattern.\n    f.x+=source(p+vec3(0.5,0,0))*18.0*sin(simTime()*3.0+p.z*0.35);\n    f.z+=source(p+vec3(0,0,0.5))*18.0*cos(simTime()*2.7+p.x*0.31);\n    vec3 v=old.xyz+dt*f*(float(N)/64.0);\n    // Emergency speed bound for large time steps / extreme user settings.\n    v=clamp(v,vec3(-24.0)*float(N)/64.0,vec3(24.0)*float(N)/64.0);\n    fragColor=vec4(walls(v,c),old.a);\n}\n",
-  "04_divergence": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); vec3 v=fetchCell(velocityTex,c).xyz;\n    float left=c.x>0?fetchCell(velocityTex,c-EX).r:0.0;\n    float down=c.y>0?fetchCell(velocityTex,c-EY).g:0.0;\n    float back=c.z>0?fetchCell(velocityTex,c-EZ).b:0.0;\n    fragColor=vec4(v.x-left+v.y-down+v.z-back,0,0,1);\n}\n",
-  "05_pressure_seed": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() { fragColor=vec4(0); }\n",
-  "06_pressure_jacobi": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); float sum=0.0; float count=0.0;\n    if(c.x>0)   { sum+=fetchCell(pressureTex,c-EX).r; count+=1.0; }\n    if(c.x<N-1) { sum+=fetchCell(pressureTex,c+EX).r; count+=1.0; }\n    if(c.y>0)   { sum+=fetchCell(pressureTex,c-EY).r; count+=1.0; }\n    if(c.y<N-1) { sum+=fetchCell(pressureTex,c+EY).r; count+=1.0; }\n    if(c.z>0)   { sum+=fetchCell(pressureTex,c-EZ).r; count+=1.0; }\n    if(c.z<N-1) { sum+=fetchCell(pressureTex,c+EZ).r; count+=1.0; }\n    float candidate=(sum-fetchCell(divergenceTex,c).r)/count;\n    // Weighted Jacobi damps the checkerboard mode of the Neumann problem.\n    float pressure=mix(fetchCell(pressureTex,c).r,candidate,0.8);\n    fragColor=vec4(pressure,0,0,1);\n}\n",
-  "07_project": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); float p=fetchCell(pressureTex,c).r;\n    vec3 gradient=vec3(fetchCell(pressureTex,c+EX).r-p,\n                       fetchCell(pressureTex,c+EY).r-p,\n                       fetchCell(pressureTex,c+EZ).r-p);\n    vec4 old=fetchCell(velocityTex,c);\n    fragColor=vec4(walls(old.xyz-gradient,c),old.a);\n}\n",
-  "08_density_forward": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    vec3 back=trace(velocityTex,vec3(cell()),dt);\n    fragColor=vec4(0,0,0,sampleField(stateTex,back).a);\n}\n",
-  "09_density_reverse": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    vec3 back=trace(velocityTex,vec3(cell()),-dt);\n    fragColor=vec4(0,0,0,sampleField(forwardTex,back).a);\n}\n",
-  "10_state": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); vec3 p=vec3(c);\n    vec3 back=clamp(trace(velocityTex,p,dt),vec3(0),vec3(float(N-1)));\n    ivec3 base=ivec3(floor(back));\n    float lo=1e10; float hi=-1e10;\n    for(int z=0;z<2;z++) for(int y=0;y<2;y++) for(int x=0;x<2;x++) {\n        float d=fetchCell(stateTex,base+ivec3(x,y,z)).a;\n        lo=min(lo,d); hi=max(hi,d);\n    }\n    float forward=fetchCell(forwardTex,c).a;\n    float corrected=forward+0.5*(fetchCell(stateTex,c).a-fetchCell(reverseTex,c).a);\n    // Limited MacCormack: use first-order value if correction overshoots.\n    if(corrected<lo || corrected>hi) corrected=forward;\n    float density=max(0.0,corrected)*exp(-dt*(mode>0.5?0.035:0.005));\n    density+=dt*source(p)*7.0;\n    fragColor=vec4(fetchCell(velocityTex,c).xyz,min(density,4.0));\n}\n",
-  "11_render": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nfloat densityAt(vec3 p) {\n    if(any(lessThan(p,vec3(-0.5))) || any(greaterThan(p,vec3(0.5)))) return 0.0;\n    return max(0.0,sampleField(stateTex,(p+0.5)*float(N)-0.5).a);\n}\nvoid main() {\n    vec2 uv=(gl_FragCoord.xy-0.5*resolution)/resolution.y;\n    vec3 background=mode>0.5?vec3(0.023,0.032,0.048):vec3(0.965,0.965,0.95);\n    if(debugView>0.5) {\n        vec3 p=vec3(uv,0.0);\n        fragColor=vec4(vec3(1.0-exp(-densityAt(p)*2.0)),1); return;\n    }\n    vec3 ro=2.05*vec3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch));\n    vec3 forward=normalize(-ro);\n    vec3 right=normalize(cross(forward,vec3(0,1,0)));\n    vec3 up=cross(right,forward);\n    vec3 rd=normalize(forward*1.75+uv.x*right+uv.y*up);\n    vec3 safe=sign(rd)*max(abs(rd),vec3(0.00001));\n    if(abs(rd.x)<0.00001) safe.x=0.00001;\n    if(abs(rd.y)<0.00001) safe.y=0.00001;\n    if(abs(rd.z)<0.00001) safe.z=0.00001;\n    vec3 t0=(-vec3(0.5)-ro)/safe;\n    vec3 t1=( vec3(0.5)-ro)/safe;\n    vec3 nearPlane=min(t0,t1), farPlane=max(t0,t1);\n    float start=max(max(nearPlane.x,nearPlane.y),max(nearPlane.z,0.0));\n    float end=min(min(farPlane.x,farPlane.y),farPlane.z);\n    if(end<=start) { fragColor=vec4(background,1); return; }\n    float ds=(end-start)/160.0;\n    float transmittance=1.0; vec3 light=vec3(0);\n    for(int i=0;i<160;i++) {\n        vec3 pos=ro+rd*(start+(float(i)+0.5)*ds);\n        float d=densityAt(pos);\n        float alpha=1.0-exp(-d*absorption*ds);\n        if(mode>0.5) {\n            float shade=exp(-densityAt(pos+vec3(-0.035,0.055,0.025))*1.8);\n            vec3 smoke=mix(vec3(0.25,0.30,0.36),vec3(0.90,0.92,0.95),shade);\n            light+=transmittance*alpha*smoke;\n        }\n        transmittance*=1.0-alpha;\n        if(transmittance<0.002) break;\n    }\n    fragColor=vec4(light+background*transmittance,1);\n}\n"
-};
-</script><script>'use strict';
-(() => {
-  const $ = id => document.getElementById(id);
-  const canvas = $('view'), status = $('status'), error = $('error');
-  let gl, running = true, failed = false, targetTime = null;
-  let simulationTime = 0, accumulator = 0, lastTime = 0, lastStatus = 0, frames = 0;
-  let yaw = 20 * Math.PI / 180, pitch = 0.08, pointer = null;
-  const dt = 1 / 60;
-  let n = 64, width = n * 8, height = n * (n / 8);
-  const programs = {}, buffers = [];
-  let framebuffer, needsRender=true;
-  const uniforms = ['stateTex','velocityTex','curlTex','divergenceTex','pressureTex','forwardTex','reverseTex',
-    'gridSize','clockTex','resolution','time','dt','reset','mode','confinement','yaw','pitch','absorption','debugView'];
-  function stopWithError(e) {
-    failed = true; running = false;
-    error.textContent = String(e.message || e);
-    status.textContent = '計算を停止しました。';
-    for (const id of ['pause','reset','step','advance']) $(id).disabled = true;
-    console.error(e);
-  }
-  function shader(type, source) {
-    const s = gl.createShader(type); gl.shaderSource(s, source); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-    return s;
-  }
-  function program(source) {
-    const p = gl.createProgram();
-    const vs = shader(gl.VERTEX_SHADER, '#version 300 es\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0,1);}');
-    const fs = shader(gl.FRAGMENT_SHADER, source.replace('#version 150', '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;'));
-    gl.attachShader(p,vs); gl.attachShader(p,fs); gl.linkProgram(p);
-    if (!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    gl.deleteShader(vs); gl.deleteShader(fs);
-    return {handle:p, locations:Object.fromEntries(uniforms.map(u=>[u,gl.getUniformLocation(p,u)]))};
-  }
-  function texture(clock=false) {
-    const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
-    // Half-float textures support linear sampling in WebGL2.
-    gl.texImage2D(gl.TEXTURE_2D,0,clock?gl.RGBA32F:gl.RGBA16F,clock?1:width,clock?1:height,0,gl.RGBA,clock?gl.FLOAT:gl.HALF_FLOAT,null);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,clock?gl.NEAREST:gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,clock?gl.NEAREST:gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-    gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
-    if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) throw new Error('浮動小数点の描画先を作成できません。WebGL2対応ブラウザーで開いてください。');
-    gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
-    return t;
-  }
-  function draw(name, output, inputs={}) {
-    const p=programs[name]; gl.useProgram(p.handle);
-    gl.bindFramebuffer(gl.FRAMEBUFFER,output?framebuffer:null);
-    if(output) gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,output,0);
-    const w=output?(name==='00_clock'?1:width):canvas.width, h=output?(name==='00_clock'?1:height):canvas.height;
-    inputs={...inputs,clockTex:buffers[11]};
-    gl.viewport(0,0,w,h);
-    const values={time:simulationTime,dt,reset:0,mode:Number($('mode').value),confinement:Number($('vorticity').value),yaw,pitch,absorption:Number($('absorption').value),debugView:Number($('display').value)};
-    for(const [key,value] of Object.entries(values)) if(p.locations[key]!==null) gl.uniform1f(p.locations[key],value);
-    if(p.locations.resolution!==null) gl.uniform2f(p.locations.resolution,w,h);
-    if(p.locations.gridSize!==null)gl.uniform1i(p.locations.gridSize,n);
-    let unit=0;
-    for(const [key,t] of Object.entries(inputs)) {
-      if(p.locations[key]===null) continue;
-      if(t===output) throw new Error('同じテクスチャを読み書きしようとしました。');
-      gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);gl.uniform1i(p.locations[key],unit++);
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>墨が流れる — 3D流体の実験室</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f5f4ef;
+      --ink: #242827;
+      --muted: #66706b;
+      --line: #d6d9d1;
+      --accent: #265d53
     }
-    gl.drawArrays(gl.TRIANGLES,0,3);
-  }
-  function step() {
-    draw('00_clock',buffers[12]);[buffers[11],buffers[12]]=[buffers[12],buffers[11]];
-    draw('01_advect_velocity',buffers[2],{stateTex:buffers[0]});
-    draw('02_curl',buffers[3],{velocityTex:buffers[2]});
-    draw('03_forces',buffers[4],{velocityTex:buffers[2],curlTex:buffers[3]});
-    draw('04_divergence',buffers[5],{velocityTex:buffers[4]});
-    draw('05_pressure_seed',buffers[6]);
-    let a=buffers[6],b=buffers[7];
-    for(let i=0;i<Number($('iterations').value);i++) {
-      draw('06_pressure_jacobi',b,{pressureTex:a,divergenceTex:buffers[5]});[a,b]=[b,a];
+
+    * {
+      box-sizing: border-box
     }
-    draw('07_project',buffers[8],{velocityTex:buffers[4],pressureTex:a});
-    draw('08_density_forward',buffers[9],{stateTex:buffers[0],velocityTex:buffers[8]});
-    draw('09_density_reverse',buffers[10],{forwardTex:buffers[9],velocityTex:buffers[8]});
-    draw('10_state',buffers[1],{stateTex:buffers[0],velocityTex:buffers[8],forwardTex:buffers[9],reverseTex:buffers[10]});
-    [buffers[0],buffers[1]]=[buffers[1],buffers[0]];
-    simulationTime+=dt;needsRender=true;
-  }
-  function render(){draw('11_render',null,{stateTex:buffers[0]});needsRender=false;}
-  function updateButton(){$('pause').textContent=running?'一時停止':'再生';}
-  function clear() {
-    gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
-    for(const t of buffers){gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);}
-    simulationTime=0;accumulator=0;targetTime=null;render();
-  }
-  function animate(now) {
-    if(failed)return;
-    try {
-      if(targetTime!==null) {
-        for(let i=0;i<6 && simulationTime<targetTime-dt*0.1;i++) step();
-        if(simulationTime>=targetTime-dt*0.1){targetTime=null;running=false;updateButton();}
-        accumulator=0;
-      } else if(running) {
-        accumulator+=Math.min((now-lastTime)/1000,0.1);
-        let count=0;
-        while(accumulator>=dt && count<5){step();accumulator-=dt;count++;}
-        if(count===5)accumulator=0;
-      } else accumulator=0;
-      if(needsRender){render();frames++;}
-      if(now-lastStatus>500) {
-        const fps=Math.round(frames*1000/(now-lastStatus));frames=0;lastStatus=now;
-        status.textContent=`${targetTime!==null?'計算中':running?'再生中':'停止中'} · ${simulationTime.toFixed(2)} 秒 · ${running||targetTime!==null?fps+' fps · ':''}圧力 ${$('iterations').value} 回`;
-        const err=gl.getError();if(err!==gl.NO_ERROR)throw new Error('WebGL描画エラー: '+err);
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.65 system-ui, -apple-system, sans-serif
+    }
+
+    main {
+      max-width: 1360px;
+      margin: auto;
+      padding: 32px
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px
+    }
+
+    small {
+      letter-spacing: .14em;
+      color: var(--muted)
+    }
+
+    h1 {
+      font: 500 clamp(25px, 3.5vw, 42px)/1.4 serif;
+      margin: 8px 0
+    }
+
+    header p {
+      max-width: 470px;
+      margin: 0;
+      color: var(--muted)
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 28px;
+      margin-top: 28px
+    }
+
+    .stage {
+      border: 1px solid var(--line);
+      background: #f6f6f2;
+      position: relative;
+      min-width: 0
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 4/3;
+      touch-action: none;
+      cursor: grab
+    }
+
+    .caption {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted)
+    }
+
+    fieldset {
+      border: 0;
+      margin: 0 0 24px;
+      padding: 0
+    }
+
+    legend {
+      font-weight: 650;
+      margin-bottom: 10px
+    }
+
+    label {
+      display: block;
+      margin: 14px 0 5px
+    }
+
+    select,
+    button {
+      font: inherit;
+      border: 1px solid var(--line);
+      background: #fffefa;
+      color: var(--ink);
+      padding: 9px 12px;
+      border-radius: 6px
+    }
+
+    select {
+      width: 100%
+    }
+
+    button {
+      cursor: pointer
+    }
+
+    button:hover {
+      border-color: var(--accent)
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent)
+    }
+
+    .buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap
+    }
+
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--accent)
+    }
+
+    output {
+      float: right;
+      font-variant-numeric: tabular-nums
+    }
+
+    .note {
+      font-size: 12px;
+      color: var(--muted)
+    }
+
+    #status {
+      padding: 12px 0;
+      min-height: 50px;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums
+    }
+
+    #error {
+      color: #9e3026;
+      white-space: pre-wrap
+    }
+
+    details {
+      border-top: 1px solid var(--line);
+      margin-top: 24px;
+      padding-top: 18px
+    }
+
+    summary {
+      cursor: pointer
+    }
+
+    a {
+      color: var(--accent)
+    }
+
+    :focus-visible {
+      outline: 3px solid #96bdb0;
+      outline-offset: 3px
+    }
+
+    @media(max-width:850px) {
+      main {
+        padding: 20px
       }
-      lastTime=now;requestAnimationFrame(animate);
-    } catch(e){stopWithError(e);}
-  }
-  try {
-    gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,preserveDrawingBuffer:true});
-    if(!gl||!gl.getExtension('EXT_color_buffer_float'))throw new Error('WebGL2とEXT_color_buffer_floatが必要です。対応ブラウザーで開いてください。');
-    gl.bindVertexArray(gl.createVertexArray());framebuffer=gl.createFramebuffer();
-    for(const [name,source] of Object.entries(window.FLUID_SHADERS))programs[name]=program(source);
-    for(let i=0;i<11;i++)buffers.push(texture());
-    buffers.push(texture(true),texture(true));
-    $('pause').onclick=()=>{targetTime=null;running=!running;updateButton();};
-    $('reset').onclick=()=>{clear();running=true;updateButton();};
-    $('step').onclick=()=>{targetTime=null;running=false;step();render();updateButton();};
-    $('advance').onclick=()=>{if(simulationTime>=8)clear();targetTime=8;running=false;updateButton();};
-    $('grid').onchange=()=>{
-      try {
-        for(const t of buffers)gl.deleteTexture(t);buffers.length=0;
-        n=Number($('grid').value);width=n*8;height=n*(n/8);
-        for(let i=0;i<11;i++)buffers.push(texture());buffers.push(texture(true),texture(true));
-        $('gridLabel').textContent=`${n} × ${n} × ${n}`;
-        if(n>64)$('iterations').value='80';
-        clear();running=true;updateButton();
-      }catch(e){stopWithError(e);}
+
+      header {
+        display: block
+      }
+
+      header p {
+        max-width: none
+      }
+
+      .layout {
+        grid-template-columns: 1fr
+      }
+
+      aside {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px
+      }
+
+      fieldset {
+        margin: 0
+      }
+
+      #status,
+      #error,
+      .note {
+        grid-column: 1/-1
+      }
+    }
+
+    @media(max-width:450px) {
+      aside {
+        display: block
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <header>
+      <div><small>KODELIFE STUDY / 09</small>
+        <h1>墨が流れる、空間をつくる。</h1>
+      </div>
+      <p>速度・圧力・濃度を3Dの格子で更新する流体実験。白い水の中に墨を落とし、角度を変えて奥行きを観察します。</p>
+    </header>
+    <div class="layout">
+      <section class="stage" aria-label="3D流体プレビュー"><canvas id="view" width="720" height="540"
+          aria-label="ドラッグで視点を回転できる3D流体"></canvas>
+        <div class="caption"><span>ドラッグで回転 · 停止中も観察できます</span><span id="gridLabel">64 × 64 × 64</span></div>
+      </section>
+      <aside>
+        <fieldset>
+          <legend>実験</legend><label for="mode">流体</label><select id="mode">
+            <option value="0">水中の黒いインク</option>
+            <option value="1">上昇する煙</option>
+          </select>
+          <p class="note">変更すると計算を初期化します。</p>
+          <div class="buttons"><button id="pause" class="primary">一時停止</button><button id="reset">最初から</button><button
+              id="step">1ステップ</button></div><button id="advance" style="margin-top:10px">8秒まで計算</button>
+        </fieldset>
+        <fieldset>
+          <legend>見た目と流れ</legend><label for="absorption">濃さ <output id="absorptionValue">32</output></label><input
+            id="absorption" type="range" min="5" max="90" value="32"><label for="vorticity">渦の補強 <output
+              id="vorticityValue">2.0</output></label><input id="vorticity" type="range" min="0" max="4" step="0.5"
+            value="2">
+          <p class="note">0で補強なし。大きい値は細かな渦を強調します。</p><label for="yaw">見る角度 <output
+              id="yawValue">20°</output></label><input id="yaw" type="range" min="-180" max="180" value="20">
+        </fieldset>
+        <fieldset>
+          <legend>計算を観察</legend><label for="grid">流体の解像度（変更で初期化）</label><select id="grid">
+            <option value="64">64³ / 標準</option>
+            <option value="96">96³ / 高精細</option>
+            <option value="128">128³ / 高負荷</option>
+          </select><label for="display">表示</label><select id="display">
+            <option value="0">立体の濃度を重ねる</option>
+            <option value="1">中央の断面</option>
+          </select><label for="iterations">圧力の反復回数</label><select id="iterations">
+            <option value="20">20回 / 軽量</option>
+            <option value="40" selected>40回 / 標準</option>
+            <option value="80">80回 / より収束</option>
+          </select><label for="quality">描画サイズ</label><select id="quality">
+            <option value="480">480 × 360 / 軽量</option>
+            <option value="720" selected>720 × 540 / 標準</option>
+            <option value="960">960 × 720 / 高精細</option>
+          </select>
+        </fieldset>
+        <div id="status" role="status">GPUを準備しています…</div>
+        <p id="error" role="alert"></p>
+      </aside>
+    </div>
+    <details>
+      <summary>この実験で計算していること</summary>
+      <p>速度の移流 → 渦と外力 → 発散 → 圧力の反復計算 → 速度補正 → 濃度の移流と補正 → 3D描画。奥行きのスライスを2Dテクスチャに並べて計算しています。</p>
+      <p>インクは最初の約2秒だけ注入され、その後も流れ続けます。再度落とすには「最初から」。煙は連続注入します。カメラの操作は流体に力を加えません。</p>
+      <p>学習用の低解像度モデルです。実写の極細の筋、水面・屈折、顔料粒子の沈殿、厳密な質量保存は再現しません。煙の浮力は濃度による近似です。</p>
+      <p><a href="https://github.com/rulers/kodelife-leaning/blob/main/tutorials/09_fluid3d.md">チュートリアルを読む</a> · <a
+          href="https://www.youtube.com/watch?v=i2x9PEIYFeM">参考映像</a></p>
+    </details>
+  </main>
+  <script>// Generated by tools/build.py; edit src/*.glsl instead.
+    window.FLUID_SHADERS = {
+      "00_clock": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() { fragColor=reset>0.5?vec4(0):vec4(simTime()+dt,0,0,1); }\n",
+      "01_advect_velocity": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); vec3 p=vec3(c);\n    vec3 bx=trace(stateTex,p+vec3(0.5,0,0),dt)-vec3(0.5,0,0);\n    vec3 by=trace(stateTex,p+vec3(0,0.5,0),dt)-vec3(0,0.5,0);\n    vec3 bz=trace(stateTex,p+vec3(0,0,0.5),dt)-vec3(0,0,0.5);\n    vec3 v=vec3(sampleField(stateTex,bx).r,sampleField(stateTex,by).g,sampleField(stateTex,bz).b);\n    fragColor=vec4(walls(v,c),fetchCell(stateTex,c).a);\n}\n",
+      "02_curl": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    vec3 p=vec3(cell());\n    vec3 dx=(velocityAt(velocityTex,p+vec3(1,0,0))-velocityAt(velocityTex,p-vec3(1,0,0)))*0.5;\n    vec3 dy=(velocityAt(velocityTex,p+vec3(0,1,0))-velocityAt(velocityTex,p-vec3(0,1,0)))*0.5;\n    vec3 dz=(velocityAt(velocityTex,p+vec3(0,0,1))-velocityAt(velocityTex,p-vec3(0,0,1)))*0.5;\n    vec3 w=vec3(dy.z-dz.y,dz.x-dx.z,dx.y-dy.x);\n    fragColor=vec4(w,length(w));\n}\n",
+      "03_forces": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvec3 vortexForce(ivec3 c) {\n    vec3 grad=vec3(fetchCell(curlTex,c+EX).a-fetchCell(curlTex,c-EX).a,\n                   fetchCell(curlTex,c+EY).a-fetchCell(curlTex,c-EY).a,\n                   fetchCell(curlTex,c+EZ).a-fetchCell(curlTex,c-EZ).a)*0.5;\n    vec3 normal=grad/max(length(grad),0.0001);\n    return confinement*cross(normal,fetchCell(curlTex,c).xyz);\n}\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); vec3 p=vec3(c);\n    vec4 old=fetchCell(velocityTex,c);\n    vec3 f0=vortexForce(c);\n    vec3 f=0.5*vec3(f0.x+vortexForce(c+EX).x,f0.y+vortexForce(c+EY).y,f0.z+vortexForce(c+EZ).z);\n    float density=0.5*(old.a+fetchCell(velocityTex,c+EY).a);\n    float direction=mode>0.5?1.0:-1.0;\n    f.y+=direction*(density*5.0+source(p+vec3(0,0.5,0))*28.0);\n    // Slightly angled, time-varying injection breaks perfect axial symmetry.\n    // This is a localized external force, not a procedural density pattern.\n    f.x+=source(p+vec3(0.5,0,0))*18.0*sin(simTime()*3.0+p.z*0.35);\n    f.z+=source(p+vec3(0,0,0.5))*18.0*cos(simTime()*2.7+p.x*0.31);\n    vec3 v=old.xyz+dt*f*(float(N)/64.0);\n    // Emergency speed bound for large time steps / extreme user settings.\n    v=clamp(v,vec3(-24.0)*float(N)/64.0,vec3(24.0)*float(N)/64.0);\n    fragColor=vec4(walls(v,c),old.a);\n}\n",
+      "04_divergence": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); vec3 v=fetchCell(velocityTex,c).xyz;\n    float left=c.x>0?fetchCell(velocityTex,c-EX).r:0.0;\n    float down=c.y>0?fetchCell(velocityTex,c-EY).g:0.0;\n    float back=c.z>0?fetchCell(velocityTex,c-EZ).b:0.0;\n    fragColor=vec4(v.x-left+v.y-down+v.z-back,0,0,1);\n}\n",
+      "05_pressure_seed": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() { fragColor=vec4(0); }\n",
+      "06_pressure_jacobi": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); float sum=0.0; float count=0.0;\n    if(c.x>0)   { sum+=fetchCell(pressureTex,c-EX).r; count+=1.0; }\n    if(c.x<N-1) { sum+=fetchCell(pressureTex,c+EX).r; count+=1.0; }\n    if(c.y>0)   { sum+=fetchCell(pressureTex,c-EY).r; count+=1.0; }\n    if(c.y<N-1) { sum+=fetchCell(pressureTex,c+EY).r; count+=1.0; }\n    if(c.z>0)   { sum+=fetchCell(pressureTex,c-EZ).r; count+=1.0; }\n    if(c.z<N-1) { sum+=fetchCell(pressureTex,c+EZ).r; count+=1.0; }\n    float candidate=(sum-fetchCell(divergenceTex,c).r)/count;\n    // Weighted Jacobi damps the checkerboard mode of the Neumann problem.\n    float pressure=mix(fetchCell(pressureTex,c).r,candidate,0.8);\n    fragColor=vec4(pressure,0,0,1);\n}\n",
+      "07_project": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); float p=fetchCell(pressureTex,c).r;\n    vec3 gradient=vec3(fetchCell(pressureTex,c+EX).r-p,\n                       fetchCell(pressureTex,c+EY).r-p,\n                       fetchCell(pressureTex,c+EZ).r-p);\n    vec4 old=fetchCell(velocityTex,c);\n    fragColor=vec4(walls(old.xyz-gradient,c),old.a);\n}\n",
+      "08_density_forward": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    vec3 back=trace(velocityTex,vec3(cell()),dt);\n    fragColor=vec4(0,0,0,sampleField(stateTex,back).a);\n}\n",
+      "09_density_reverse": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    vec3 back=trace(velocityTex,vec3(cell()),-dt);\n    fragColor=vec4(0,0,0,sampleField(forwardTex,back).a);\n}\n",
+      "10_state": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nvoid main() {\n    if(reset>0.5) { fragColor=vec4(0); return; }\n    ivec3 c=cell(); vec3 p=vec3(c);\n    vec3 back=clamp(trace(velocityTex,p,dt),vec3(0),vec3(float(N-1)));\n    ivec3 base=ivec3(floor(back));\n    float lo=1e10; float hi=-1e10;\n    for(int z=0;z<2;z++) for(int y=0;y<2;y++) for(int x=0;x<2;x++) {\n        float d=fetchCell(stateTex,base+ivec3(x,y,z)).a;\n        lo=min(lo,d); hi=max(hi,d);\n    }\n    float forward=fetchCell(forwardTex,c).a;\n    float corrected=forward+0.5*(fetchCell(stateTex,c).a-fetchCell(reverseTex,c).a);\n    // Limited MacCormack: use first-order value if correction overshoots.\n    if(corrected<lo || corrected>hi) corrected=forward;\n    float density=max(0.0,corrected)*exp(-dt*(mode>0.5?0.035:0.005));\n    density+=dt*source(p)*7.0;\n    fragColor=vec4(fetchCell(velocityTex,c).xyz,min(density,4.0));\n}\n",
+      "11_render": "#version 150\n// Shared GLSL 150 source. build.py expands this into each standalone pass.\nuniform sampler2D stateTex;\nuniform sampler2D velocityTex;\nuniform sampler2D curlTex;\nuniform sampler2D divergenceTex;\nuniform sampler2D pressureTex;\nuniform sampler2D forwardTex;\nuniform sampler2D reverseTex;\nuniform vec2 resolution;\nuniform sampler2D clockTex;\nfloat simTime() { return texelFetch(clockTex, ivec2(0), 0).r; }\nuniform float dt;\nuniform float reset;\nuniform float mode;       // 0: sinking ink; 1: rising smoke\nuniform float confinement; // optional visual restoration of small vortices\nuniform float yaw;\nuniform float pitch;\nuniform float absorption;\nuniform float debugView;  // 0: volume, 1: middle density slice\nout vec4 fragColor;\nuniform int gridSize;\n#define N gridSize\nconst int COLS = 8;\n#define ATLAS ivec2(N * COLS, N * (N / COLS))\nconst ivec3 EX = ivec3(1,0,0);\nconst ivec3 EY = ivec3(0,1,0);\nconst ivec3 EZ = ivec3(0,0,1);\n\nivec2 atlasPixel(ivec3 c) {\n    c = clamp(c, ivec3(0), ivec3(N-1));\n    return ivec2((c.z % COLS)*N + c.x, (c.z / COLS)*N + c.y);\n}\nivec3 cell() {\n    ivec2 a = ivec2(gl_FragCoord.xy);\n    return ivec3(a.x % N, a.y % N, a.x / N + COLS*(a.y / N));\n}\nvec4 fetchCell(sampler2D field, ivec3 c) {\n    return texelFetch(field, atlasPixel(c), 0);\n}\nvec4 sampleField(sampler2D field, vec3 p) {\n    // Hardware bilinear XY plus explicit Z interpolation; no tile bleed.\n    p = clamp(p, vec3(0.0), vec3(float(N-1)));\n    int z0 = int(floor(p.z));\n    int z1 = min(z0+1, N-1);\n    vec2 a = vec2((z0 % COLS)*N, (z0 / COLS)*N) + p.xy + 0.5;\n    vec2 b = vec2((z1 % COLS)*N, (z1 / COLS)*N) + p.xy + 0.5;\n    return mix(textureLod(field, a/vec2(ATLAS), 0.0),\n               textureLod(field, b/vec2(ATLAS), 0.0), fract(p.z));\n}\nvec3 velocityAt(sampler2D field, vec3 p) {\n    // MAC layout: positive X/Y/Z face velocity in R/G/B; scalar in A.\n    return vec3(sampleField(field,p-vec3(0.5,0,0)).r,\n                sampleField(field,p-vec3(0,0.5,0)).g,\n                sampleField(field,p-vec3(0,0,0.5)).b);\n}\nvec3 trace(sampler2D field, vec3 p, float stepSize) {\n    vec3 midpoint = p - 0.5*stepSize*velocityAt(field,p);\n    return p-stepSize*velocityAt(field,midpoint);\n}\nvec3 walls(vec3 v, ivec3 c) {\n    // Negative exterior faces are implicit zeros; positive exterior faces explicit.\n    if(c.x==N-1) v.x=0.0;\n    if(c.y==N-1) v.y=0.0;\n    if(c.z==N-1) v.z=0.0;\n    return v;\n}\nfloat source(vec3 p) {\n    vec3 x=(p+0.5)/float(N);\n    float result=0.0;\n    for(int i=0;i<3;i++) {\n        float fi=float(i);\n        float age=simTime()-fi*0.32;\n        float pulse=smoothstep(0.0,0.15,age)*(1.0-smoothstep(0.8,1.35,age));\n        if(mode>0.5) pulse=1.0;\n        vec3 center=vec3(0.34+fi*0.16,mode>0.5?0.16:0.84,0.40+fi*0.10);\n        center.x+=0.012*sin(simTime()*2.1+fi*2.0);\n        vec3 q=(x-center)/vec3(0.045,0.036,0.045);\n        result+=exp(-dot(q,q)*1.5)*pulse;\n    }\n    return result;\n}\n\nfloat densityAt(vec3 p) {\n    if(any(lessThan(p,vec3(-0.5))) || any(greaterThan(p,vec3(0.5)))) return 0.0;\n    return max(0.0,sampleField(stateTex,(p+0.5)*float(N)-0.5).a);\n}\nvoid main() {\n    vec2 uv=(gl_FragCoord.xy-0.5*resolution)/resolution.y;\n    vec3 background=mode>0.5?vec3(0.023,0.032,0.048):vec3(0.965,0.965,0.95);\n    if(debugView>0.5) {\n        vec3 p=vec3(uv,0.0);\n        fragColor=vec4(vec3(1.0-exp(-densityAt(p)*2.0)),1); return;\n    }\n    vec3 ro=2.05*vec3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch));\n    vec3 forward=normalize(-ro);\n    vec3 right=normalize(cross(forward,vec3(0,1,0)));\n    vec3 up=cross(right,forward);\n    vec3 rd=normalize(forward*1.75+uv.x*right+uv.y*up);\n    vec3 safe=sign(rd)*max(abs(rd),vec3(0.00001));\n    if(abs(rd.x)<0.00001) safe.x=0.00001;\n    if(abs(rd.y)<0.00001) safe.y=0.00001;\n    if(abs(rd.z)<0.00001) safe.z=0.00001;\n    vec3 t0=(-vec3(0.5)-ro)/safe;\n    vec3 t1=( vec3(0.5)-ro)/safe;\n    vec3 nearPlane=min(t0,t1), farPlane=max(t0,t1);\n    float start=max(max(nearPlane.x,nearPlane.y),max(nearPlane.z,0.0));\n    float end=min(min(farPlane.x,farPlane.y),farPlane.z);\n    if(end<=start) { fragColor=vec4(background,1); return; }\n    float ds=(end-start)/160.0;\n    float transmittance=1.0; vec3 light=vec3(0);\n    for(int i=0;i<160;i++) {\n        vec3 pos=ro+rd*(start+(float(i)+0.5)*ds);\n        float d=densityAt(pos);\n        float alpha=1.0-exp(-d*absorption*ds);\n        if(mode>0.5) {\n            float shade=exp(-densityAt(pos+vec3(-0.035,0.055,0.025))*1.8);\n            vec3 smoke=mix(vec3(0.25,0.30,0.36),vec3(0.90,0.92,0.95),shade);\n            light+=transmittance*alpha*smoke;\n        }\n        transmittance*=1.0-alpha;\n        if(transmittance<0.002) break;\n    }\n    fragColor=vec4(light+background*transmittance,1);\n}\n"
     };
-    $('mode').onchange=()=>{clear();running=true;updateButton();};
-    $('absorption').oninput=()=>{$('absorptionValue').value=$('absorption').value;needsRender=true;};
-    $('vorticity').oninput=()=>{$('vorticityValue').value=Number($('vorticity').value).toFixed(1);};
-    $('yaw').oninput=()=>{yaw=Number($('yaw').value)*Math.PI/180;$('yawValue').value=$('yaw').value+'°';needsRender=true;};
-    $('display').onchange=()=>{needsRender=true;};
-    $('quality').onchange=()=>{canvas.width=Number($('quality').value);canvas.height=canvas.width*3/4;needsRender=true;};
-    canvas.onpointerdown=e=>{pointer={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);};
-    canvas.onpointermove=e=>{if(!pointer)return;yaw+=(e.clientX-pointer.x)*0.006;pitch=Math.max(-1.1,Math.min(1.1,pitch+(e.clientY-pointer.y)*0.006));pointer={x:e.clientX,y:e.clientY};yaw=Math.atan2(Math.sin(yaw),Math.cos(yaw));$('yaw').value=Math.round(yaw*180/Math.PI);$('yawValue').value=$('yaw').value+'°';needsRender=true;};
-    canvas.onpointerup=()=>{pointer=null;};canvas.onpointercancel=()=>{pointer=null;};
-    canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();stopWithError(new Error('GPU接続が失われました。ページを再読み込みしてください。'));});
-    lastTime=performance.now();lastStatus=lastTime;requestAnimationFrame(animate);
-  } catch(e){stopWithError(e);}
-})();
-</script></body></html>
+  </script>
+  <script>'use strict';
+    (() => {
+      const $ = id => document.getElementById(id);
+      const canvas = $('view'), status = $('status'), error = $('error');
+      let gl, running = true, failed = false, targetTime = null;
+      let simulationTime = 0, accumulator = 0, lastTime = 0, lastStatus = 0, frames = 0;
+      let yaw = 20 * Math.PI / 180, pitch = 0.08, pointer = null;
+      const dt = 1 / 60;
+      let n = 64, width = n * 8, height = n * (n / 8);
+      const programs = {}, buffers = [];
+      let framebuffer, needsRender = true;
+      const uniforms = ['stateTex', 'velocityTex', 'curlTex', 'divergenceTex', 'pressureTex', 'forwardTex', 'reverseTex',
+        'gridSize', 'clockTex', 'resolution', 'time', 'dt', 'reset', 'mode', 'confinement', 'yaw', 'pitch', 'absorption', 'debugView'];
+      function stopWithError(e) {
+        failed = true; running = false;
+        error.textContent = String(e.message || e);
+        status.textContent = '計算を停止しました。';
+        for (const id of ['pause', 'reset', 'step', 'advance']) $(id).disabled = true;
+        console.error(e);
+      }
+      function shader(type, source) {
+        const s = gl.createShader(type); gl.shaderSource(s, source); gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+        return s;
+      }
+      function program(source) {
+        const p = gl.createProgram();
+        const vs = shader(gl.VERTEX_SHADER, '#version 300 es\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0,1);}');
+        const fs = shader(gl.FRAGMENT_SHADER, source.replace('#version 150', '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;'));
+        gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+        gl.deleteShader(vs); gl.deleteShader(fs);
+        return { handle: p, locations: Object.fromEntries(uniforms.map(u => [u, gl.getUniformLocation(p, u)])) };
+      }
+      function texture(clock = false) {
+        const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+        // Half-float textures support linear sampling in WebGL2.
+        gl.texImage2D(gl.TEXTURE_2D, 0, clock ? gl.RGBA32F : gl.RGBA16F, clock ? 1 : width, clock ? 1 : height, 0, gl.RGBA, clock ? gl.FLOAT : gl.HALF_FLOAT, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, clock ? gl.NEAREST : gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, clock ? gl.NEAREST : gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('浮動小数点の描画先を作成できません。WebGL2対応ブラウザーで開いてください。');
+        gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+        return t;
+      }
+      function draw(name, output, inputs = {}) {
+        const p = programs[name]; gl.useProgram(p.handle);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, output ? framebuffer : null);
+        if (output) gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, output, 0);
+        const w = output ? (name === '00_clock' ? 1 : width) : canvas.width, h = output ? (name === '00_clock' ? 1 : height) : canvas.height;
+        inputs = { ...inputs, clockTex: buffers[11] };
+        gl.viewport(0, 0, w, h);
+        const values = { time: simulationTime, dt, reset: 0, mode: Number($('mode').value), confinement: Number($('vorticity').value), yaw, pitch, absorption: Number($('absorption').value), debugView: Number($('display').value) };
+        for (const [key, value] of Object.entries(values)) if (p.locations[key] !== null) gl.uniform1f(p.locations[key], value);
+        if (p.locations.resolution !== null) gl.uniform2f(p.locations.resolution, w, h);
+        if (p.locations.gridSize !== null) gl.uniform1i(p.locations.gridSize, n);
+        let unit = 0;
+        for (const [key, t] of Object.entries(inputs)) {
+          if (p.locations[key] === null) continue;
+          if (t === output) throw new Error('同じテクスチャを読み書きしようとしました。');
+          gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); gl.uniform1i(p.locations[key], unit++);
+        }
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      function step() {
+        draw('00_clock', buffers[12]);[buffers[11], buffers[12]] = [buffers[12], buffers[11]];
+        draw('01_advect_velocity', buffers[2], { stateTex: buffers[0] });
+        draw('02_curl', buffers[3], { velocityTex: buffers[2] });
+        draw('03_forces', buffers[4], { velocityTex: buffers[2], curlTex: buffers[3] });
+        draw('04_divergence', buffers[5], { velocityTex: buffers[4] });
+        draw('05_pressure_seed', buffers[6]);
+        let a = buffers[6], b = buffers[7];
+        for (let i = 0; i < Number($('iterations').value); i++) {
+          draw('06_pressure_jacobi', b, { pressureTex: a, divergenceTex: buffers[5] });[a, b] = [b, a];
+        }
+        draw('07_project', buffers[8], { velocityTex: buffers[4], pressureTex: a });
+        draw('08_density_forward', buffers[9], { stateTex: buffers[0], velocityTex: buffers[8] });
+        draw('09_density_reverse', buffers[10], { forwardTex: buffers[9], velocityTex: buffers[8] });
+        draw('10_state', buffers[1], { stateTex: buffers[0], velocityTex: buffers[8], forwardTex: buffers[9], reverseTex: buffers[10] });
+        [buffers[0], buffers[1]] = [buffers[1], buffers[0]];
+        simulationTime += dt; needsRender = true;
+      }
+      function render() { draw('11_render', null, { stateTex: buffers[0] }); needsRender = false; }
+      function updateButton() { $('pause').textContent = running ? '一時停止' : '再生'; }
+      function clear() {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        for (const t of buffers) { gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); }
+        simulationTime = 0; accumulator = 0; targetTime = null; render();
+      }
+      function animate(now) {
+        if (failed) return;
+        try {
+          if (targetTime !== null) {
+            for (let i = 0; i < 6 && simulationTime < targetTime - dt * 0.1; i++) step();
+            if (simulationTime >= targetTime - dt * 0.1) { targetTime = null; running = false; updateButton(); }
+            accumulator = 0;
+          } else if (running) {
+            accumulator += Math.min((now - lastTime) / 1000, 0.1);
+            let count = 0;
+            while (accumulator >= dt && count < 5) { step(); accumulator -= dt; count++; }
+            if (count === 5) accumulator = 0;
+          } else accumulator = 0;
+          if (needsRender) { render(); frames++; }
+          if (now - lastStatus > 500) {
+            const fps = Math.round(frames * 1000 / (now - lastStatus)); frames = 0; lastStatus = now;
+            status.textContent = `${targetTime !== null ? '計算中' : running ? '再生中' : '停止中'} · ${simulationTime.toFixed(2)} 秒 · ${running || targetTime !== null ? fps + ' fps · ' : ''}圧力 ${$('iterations').value} 回`;
+            const err = gl.getError(); if (err !== gl.NO_ERROR) throw new Error('WebGL描画エラー: ' + err);
+          }
+          lastTime = now; requestAnimationFrame(animate);
+        } catch (e) { stopWithError(e); }
+      }
+      try {
+        gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, preserveDrawingBuffer: true });
+        if (!gl || !gl.getExtension('EXT_color_buffer_float')) throw new Error('WebGL2とEXT_color_buffer_floatが必要です。対応ブラウザーで開いてください。');
+        gl.bindVertexArray(gl.createVertexArray()); framebuffer = gl.createFramebuffer();
+        for (const [name, source] of Object.entries(window.FLUID_SHADERS)) programs[name] = program(source);
+        for (let i = 0; i < 11; i++)buffers.push(texture());
+        buffers.push(texture(true), texture(true));
+        $('pause').onclick = () => { targetTime = null; running = !running; updateButton(); };
+        $('reset').onclick = () => { clear(); running = true; updateButton(); };
+        $('step').onclick = () => { targetTime = null; running = false; step(); render(); updateButton(); };
+        $('advance').onclick = () => { if (simulationTime >= 8) clear(); targetTime = 8; running = false; updateButton(); };
+        $('grid').onchange = () => {
+          try {
+            for (const t of buffers) gl.deleteTexture(t); buffers.length = 0;
+            n = Number($('grid').value); width = n * 8; height = n * (n / 8);
+            for (let i = 0; i < 11; i++)buffers.push(texture()); buffers.push(texture(true), texture(true));
+            $('gridLabel').textContent = `${n} × ${n} × ${n}`;
+            if (n > 64) $('iterations').value = '80';
+            clear(); running = true; updateButton();
+          } catch (e) { stopWithError(e); }
+        };
+        $('mode').onchange = () => { clear(); running = true; updateButton(); };
+        $('absorption').oninput = () => { $('absorptionValue').value = $('absorption').value; needsRender = true; };
+        $('vorticity').oninput = () => { $('vorticityValue').value = Number($('vorticity').value).toFixed(1); };
+        $('yaw').oninput = () => { yaw = Number($('yaw').value) * Math.PI / 180; $('yawValue').value = $('yaw').value + '°'; needsRender = true; };
+        $('display').onchange = () => { needsRender = true; };
+        $('quality').onchange = () => { canvas.width = Number($('quality').value); canvas.height = canvas.width * 3 / 4; needsRender = true; };
+        canvas.onpointerdown = e => { pointer = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); };
+        canvas.onpointermove = e => { if (!pointer) return; yaw += (e.clientX - pointer.x) * 0.006; pitch = Math.max(-1.1, Math.min(1.1, pitch + (e.clientY - pointer.y) * 0.006)); pointer = { x: e.clientX, y: e.clientY }; yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw)); $('yaw').value = Math.round(yaw * 180 / Math.PI); $('yawValue').value = $('yaw').value + '°'; needsRender = true; };
+        canvas.onpointerup = () => { pointer = null; }; canvas.onpointercancel = () => { pointer = null; };
+        canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); stopWithError(new Error('GPU接続が失われました。ページを再読み込みしてください。')); });
+        lastTime = performance.now(); lastStatus = lastTime; requestAnimationFrame(animate);
+      } catch (e) { stopWithError(e); }
+    })();
+  </script>
+</body>
+
+</html>

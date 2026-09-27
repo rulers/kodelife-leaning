@@ -1,0 +1,3 @@
+node_modules/
+**/shaders.js
+**/preview.html
