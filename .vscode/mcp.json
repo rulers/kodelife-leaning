@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "lean-ctx": {
+      "args": [],
+      "command": "/opt/homebrew/bin/lean-ctx",
+      "env": {},
+      "type": "stdio"
+    }
+  }
+}
